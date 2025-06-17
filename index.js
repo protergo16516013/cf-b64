@@ -7,7 +7,6 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
-
 const cookie_key="session_id"
 
 export default {
@@ -66,8 +65,14 @@ async function getExternalData(url){
     res.isError = true
     res.message = getMessage("help")
   }else{
-    res.message = await fetch(externalURL)
+    try{
+      res.message = await fetch(externalURL)
       .then(res => res.text())
+    }catch(err){
+      res.isError = true
+      res.message = [err.message, getMessage("help")].join("\n\n")
+      console.warn(err)
+    }
   }
 
   return res 
@@ -93,7 +98,7 @@ function authenticate(request, env){
   var isAuthenticated = false
   var reason = ""
 
-  var private_key = env.private_key
+  var secret = env.secret
   var hasCookie = request.headers.has("Cookie")
   if(!hasCookie){
     reason = "please authenticate your session!"
@@ -103,11 +108,11 @@ function authenticate(request, env){
   var rawCookies = request.headers.get("Cookie")
   var cookies = parseCookie(rawCookies)
 
-  if( !(Object.keys(cookies).includes(cookie_key) && private_key === cookies[cookie_key]) ){
+  if( !(Object.keys(cookies).includes(cookie_key) && secret === cookies[cookie_key]) ){
     reason = "invalid session!"
   }
 
-  if(private_key === cookies[cookie_key]){
+  if(secret === cookies[cookie_key]){
     isAuthenticated = true
     reason = "session authenticated! proceed to /decode or /encode"
   }
@@ -120,16 +125,18 @@ function authenticate(request, env){
 function getMessage(key){
   const messages = {
     "help":[
-      "error: empty url param!",
+      "error: something went wrong!",
       "usage: ",
       "  /encode?url=<external_url>",
       "    or",
       "  /decode?url=<external_url>",
+      "example: ",
+      "  /encode?url=https://example.com",
       "",
       "description:",
       "these endpoint will return you the base64 encoded and decoded" ,
       "string of the entered <external_url>",
-    ]
+    ],
   }
 
   if(!Object.keys(messages).includes(key)){
